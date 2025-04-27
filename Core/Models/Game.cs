@@ -1,4 +1,6 @@
-using Core;
+using Core.Storage;
+
+namespace Core.Models;
 
 public class Game(int id, int judgeId, List<Participant> participants, bool isActive)
 {

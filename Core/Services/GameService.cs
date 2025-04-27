@@ -1,5 +1,9 @@
 using System.Collections.Concurrent;
-using Core;
+using Core.Dtos;
+using Core.Models;
+using Core.Storage;
+
+namespace Core.Services;
 
 public class GameService
 {

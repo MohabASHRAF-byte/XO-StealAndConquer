@@ -1,7 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
-using Core;
+using Core.Dtos;
+using Core.Services;
+using Core.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]

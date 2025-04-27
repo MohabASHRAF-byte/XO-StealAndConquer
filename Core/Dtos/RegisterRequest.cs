@@ -1,4 +1,4 @@
-namespace Core;
+namespace Core.Dtos;
 
 public class RegisterRequest(string username, string password)
 {

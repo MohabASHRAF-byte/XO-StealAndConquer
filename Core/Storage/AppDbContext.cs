@@ -1,4 +1,7 @@
+using Core.Models;
 using Microsoft.EntityFrameworkCore;
+
+namespace Core.Storage;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {

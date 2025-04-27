@@ -1,10 +1,14 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Core;
+using Core.Dtos;
+using Core.Models;
+using Core.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+
+namespace Core.Services;
 
 public class AuthService(AppDbContext dbContext, IConfiguration configuration)
 {
@@ -54,7 +58,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration)
     {
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };

@@ -1,4 +1,6 @@
-namespace Core;
+using Core.Storage;
+
+namespace Core.Dtos;
 
 public class JoinGameRequest(int gameId, Role role)
 {

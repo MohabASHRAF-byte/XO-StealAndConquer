@@ -1,6 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Core;
+using Core.Dtos;
+using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -44,7 +44,7 @@ public class AuthController(AuthService authService) : ControllerBase
     {
         var user = new
         {
-            Id = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value,
+            Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
             Username = User.FindFirst(ClaimTypes.Name)?.Value,
             Role = User.FindFirst(ClaimTypes.Role)?.Value,
             GameId = User.FindFirst("gameId")?.Value

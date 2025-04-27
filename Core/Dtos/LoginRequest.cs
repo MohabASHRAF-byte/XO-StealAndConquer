@@ -1,4 +1,4 @@
-namespace Core;
+namespace Core.Dtos;
 
 public class LoginRequest(string username, string password)
 {

@@ -1,3 +1,5 @@
+namespace Core.Models;
+
 public class User(int id, string username, string passwordHash, string? connectionIds)
 {
     public int Id { get; set; } = id;

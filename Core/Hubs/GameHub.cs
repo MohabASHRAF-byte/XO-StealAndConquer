@@ -1,6 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
+using Core.Storage;
 using Microsoft.AspNetCore.SignalR;
+
+namespace Core.Hubs;
 
 public class GameHub(AppDbContext dbContext) : Hub
 {
