@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4"/>
+        <PackageReference Include="Serilog" Version="4.2.0"/>
+        <PackageReference Include="Serilog.AspNetCore" Version="8.0.3"/>
+        <PackageReference Include="Serilog.Sinks.ApplicationInsights" Version="4.0.0"/>
+        <PackageReference Include="SQLite" Version="3.13.0"/>
+        <PackageReference Include="StackExchange.Redis" Version="2.8.0"/>
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.2"/>
+        <PackageReference Include="System.Text.Json" Version="9.0.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Microsoft.Extensions.Configuration.Abstractions">
+            <HintPath>..\..\..\.nuget\packages\microsoft.aspnetcore.app.ref\8.0.11\ref\net8.0\Microsoft.Extensions.Configuration.Abstractions.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+</Project>
