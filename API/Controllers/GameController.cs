@@ -1,7 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using Core.Dtos;
 using Core.Services;
-using Core.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,41 +11,41 @@ public class GameController(GameService gameService) : ControllerBase
 {
     [HttpPost]
     [Authorize]
-    public async Task<IActionResult> CreateGame()
+    public async Task<IActionResult> CreateGame([FromBody] CreateGameRequest request)
     {
-        var userId = int.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "0");
-        if (userId == 0)
-            return Unauthorized();
-
-        var gameId = await gameService.CreateGameAsync(userId);
-        // Generate new JWT with Judge role
-        var token = await gameService._authService.GenerateGameTokenAsync(userId, gameId, Role.Judge);
-        return Ok(new { GameId = gameId, Token = token });
+        var gameId =
+            await gameService.CreateGameAsync(request.RowLabels, request.ColumnLabels, request.RoundDuration ?? 30);
+        return Ok(new { GameId = gameId });
     }
 
-    [HttpPost("join")]
+    [HttpDelete("{gameId}")]
     [Authorize]
-    public async Task<IActionResult> JoinGame([FromBody] JoinGameRequest request)
+    public async Task<IActionResult> EndGame([FromRoute] int gameId)
     {
-        try
-        {
-            var userId = int.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "0");
-            if (userId == 0)
-                return Unauthorized();
-
-            var token = await gameService.JoinGameAsync(userId, request);
-            return Ok(new { Token = token });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
+        await gameService.EndGameAsync(gameId);
+        return Ok();
     }
 
-    [HttpGet("test-judge")]
-    [Authorize(Roles = nameof(Role.Judge))]
-    public IActionResult TestJudge()
+    [HttpGet("{gameId}")]
+    [Authorize]
+    public IActionResult GetGame([FromRoute] int gameId)
     {
-        return Ok("Only Judges can access this!");
+        return Ok(gameService.LoadGameAsync(gameId));
+    }
+
+    [HttpPost("{gameId}/join")]
+    [Authorize]
+    public async Task<IActionResult> JoinGame([FromRoute] int gameId, [FromBody] JoinGameRequest request)
+    {
+        await gameService.JoinGameAsync(gameId, request.Role, request.Team);
+        return Ok();
+    }
+
+    [HttpPost("leave")]
+    [Authorize]
+    public async Task<IActionResult> LeaveGame()
+    {
+        await gameService.LeaveGameAsync();
+        return Ok();
     }
 }

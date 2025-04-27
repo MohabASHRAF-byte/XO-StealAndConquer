@@ -2,8 +2,8 @@ using Core.Storage;
 
 namespace Core.Dtos;
 
-public class JoinGameRequest(int gameId, Role role)
+public class JoinGameRequest
 {
-    public int GameId { get; set; } = gameId;
-    public Role Role { get; set; } = role;
+    public Role Role { get; set; }
+    public Team Team { get; set; }
 }

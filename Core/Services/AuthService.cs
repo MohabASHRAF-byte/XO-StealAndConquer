@@ -68,7 +68,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration)
         if (gameId.HasValue)
             claims.Add(new Claim("gameId", gameId.Value.ToString()));
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(

@@ -1,17 +1,19 @@
+using Core.Repositories.User;
 using Core.Storage;
 
 namespace Core.Models;
 
-public class Game(int id, int judgeId, List<Participant> participants, bool isActive)
+public class Game
 {
-    public int Id { get; set; } = id;
-    public int JudgeId { get; set; } = judgeId;
-    public List<Participant> Participants { get; set; } = participants;
-    public bool IsActive { get; set; } = isActive;
-}
-
-public class Participant(int userId, Role role)
-{
-    public int UserId { get; set; } = userId;
-    public Role Role { get; set; } = role;
+    public int RoundDuration = 30;
+    public int GameId { get; set; }
+    public PlayerDto Judge { get; set; } = new();
+    public List<PlayerDto> Team1 { get; set; } = [];
+    public List<PlayerDto> Team2 { get; set; } = [];
+    public List<PlayerDto> Spectators { get; set; } = [];
+    public List<int> Participants { get; set; } = [];
+    public List<string> RowLabels { get; set; } = [];
+    public List<string> ColumnLabels { get; set; } = [];
+    public List<CellStates> CellStates { get; set; } = [];
+    public Round Round { get; set; } = Round.Judge;
 }
