@@ -334,3 +334,4 @@ __pycache__/
 # tools/
 
 # End of https://www.toptal.com/developers/gitignore/api/aspnetcore
+/API/appsettings.Development.json
