@@ -1,7 +1,3 @@
-using Core.Dtos;
-using Core.Services;
-using Core.Storage;
-using Core.UserContext;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

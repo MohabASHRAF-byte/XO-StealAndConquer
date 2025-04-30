@@ -2,20 +2,17 @@ using Core.Dtos;
 using Core.Services;
 using Core.Storage;
 using Core.UserContext;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Core.Jobs;
 
 public class DatabaseSeeder
 {
-    private readonly AppDbContext _dbContext;
     private readonly AuthService _authService;
+    private readonly AppDbContext _dbContext;
     private readonly GameService _gameService;
-    private readonly IUserContext _userContext;
     private readonly ILogger<DatabaseSeeder> _logger;
-
-    public Dictionary<string, string> UserTokens { get; } = new();
+    private readonly IUserContext _userContext;
 
     public DatabaseSeeder(
         AppDbContext dbContext,
@@ -30,6 +27,8 @@ public class DatabaseSeeder
         _userContext = userContext;
         _logger = logger;
     }
+
+    public Dictionary<string, string> UserTokens { get; } = new();
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
@@ -54,8 +53,8 @@ public class DatabaseSeeder
         // 2. Create game with Mohab0
         _userContext.SetToken(UserTokens["Mohab0"]);
         var gameId = await _gameService.CreateGameAsync(
-            new() { "Man City", "Tottenham", "Liverpool" },
-            new() { "Egyptian", "English", "Brazilian" }
+            new List<string> { "Man City", "Tottenham", "Liverpool" },
+            new List<string> { "Egyptian", "English", "Brazilian" }
         );
         _logger.LogInformation($"Game created by Mohab0 (ID: {gameId})");
 
