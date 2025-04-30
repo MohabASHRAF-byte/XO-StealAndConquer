@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Core.Dtos;
+using Core.Models;
 using Core.Repositories.User;
 using Core.Storage;
 using Microsoft.AspNetCore.Authorization;
@@ -109,5 +110,23 @@ public class GameHub(AppDbContext dbContext, IUserRepository userRepository) : H
         // Broadcast new selection
         await Clients.Group($"game:{gameId}")
             .SendAsync("CellSelected", cellIndex, cellMap[cellIndex]);
+    }
+
+    public async Task StartGame(int gameId, int team)
+    {
+        var userId = int.Parse(Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+        GameMemoryStorage.TryGetGame(gameId, out var game);
+
+        if (game.Judge.Id != userId)
+            throw new HubException("Only the judge can start the round.");
+        if (game.Round != Round.Notstarted)
+            return;
+        game.NextTeam = team == 1 ? 2 : 1;
+
+        await Clients.Group($"game:{gameId}").SendAsync("StartTimer", new
+        {
+            Team = team,
+            Duration = game.RoundDuration
+        });
     }
 }

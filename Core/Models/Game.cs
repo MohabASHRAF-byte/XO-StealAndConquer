@@ -18,6 +18,7 @@ public class Game
     public Round Round { get; set; } = Round.Judge;
     public int CurrentRoundNumber { get; set; } = 0;
     public Dictionary<int, List<Answer>> Answers { get; set; } = []; // Round number -> List of answers
+    public int NextTeam { set; get; } = 0;
 }
 
 public class Answer
@@ -37,6 +38,7 @@ public enum CellStates
 
 public enum Round
 {
+    Notstarted,
     Judge,
     Team1,
     Team2,
