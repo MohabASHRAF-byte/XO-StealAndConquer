@@ -71,6 +71,8 @@ builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IUserContext, UserContext>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<DatabaseSeeder>();
+
 builder.Services.AddHttpContextAccessor();
 
 // Configure JWT Authentication
