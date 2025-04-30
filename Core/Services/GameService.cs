@@ -1,26 +1,26 @@
+using Core.Dtos;
+using Core.Hubs;
 using Core.Models;
 using Core.Repositories.User;
 using Core.Storage;
 using Core.UserContext;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Core.Services;
 
-public class GameService(IUserContext userContext, IUserRepository userRepository)
+public class GameService(IUserContext userContext, IUserRepository userRepository, IHubContext<GameHub> hubContext)
 {
     public async Task<int> CreateGameAsync(List<string> rowLabels, List<string> colLabels, int roundDuration = 30)
     {
-        // Check if user can create a game
         var user = userContext.GetCurrentUser();
         var canCreateGame = await userRepository.CanjoinGame(user.Id);
         if (canCreateGame != null)
-            throw new BadHttpRequestException("User Already on a game leave it first!");
+            throw new BadHttpRequestException("User already in a game; leave it first!");
 
-        // Check if the labels are valid
         if (rowLabels.Count != 3 || colLabels.Count != 3)
             throw new BadHttpRequestException("Invalid number of row/col labels");
 
-        // Check if the time duration is correct
         if (roundDuration <= 0)
             roundDuration = 30;
 
@@ -43,42 +43,62 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
             RoundDuration = roundDuration
         };
 
-        // Add the game to memory storage
         if (!GameMemoryStorage.TryAddGame(gameId, game))
             throw new InvalidOperationException("Failed to create game.");
+
         await userRepository.AddPlayerToGame(user.Id, gameId);
+
+        await hubContext.Clients.Group($"game:{gameId}")
+            .SendAsync("GameCreated", new { GameId = gameId, Judge = judge });
+
         return gameId;
     }
 
     public async Task EndGameAsync(int gameId)
     {
         var user = userContext.GetCurrentUser();
-
-        // Get the game from memory storage
         if (!GameMemoryStorage.TryGetGame(gameId, out var game))
             throw new InvalidOperationException("Game not found.");
 
-        // Ensure only the judge can end the game
         if (user.Id != game.Judge.Id)
             throw new InvalidOperationException("Only the Game Judge can end the game.");
 
         await userRepository.SetUsersFree(game.Participants);
-        // Remove the game from memory storage
         GameMemoryStorage.TryRemoveGame(gameId);
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("GameEnded", new { GameId = gameId });
     }
 
     public Game LoadGameAsync(int gameId)
     {
         var user = userContext.GetCurrentUser();
-
         if (!GameMemoryStorage.TryGetGame(gameId, out var game))
             throw new InvalidOperationException("Game not found.");
 
-        // Check if the user is a participant
         if (!game.Participants.Contains(user.Id))
-            throw new InvalidOperationException("User should join the game to watch it.");
+            throw new InvalidOperationException("User must join the game to watch it.");
 
         return game;
+    }
+
+    public async Task<LoadGameDto> LoadGameAsync()
+    {
+        var user = userContext.GetCurrentUser();
+        var inGame = await userRepository.CanjoinGame(user.Id);
+        if (inGame == null) return new LoadGameDto();
+
+        var gameId = (int)inGame;
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (!game.Participants.Contains(user.Id))
+            throw new InvalidOperationException("User must join the game to watch it.");
+
+        return new LoadGameDto(game)
+        {
+            InGame = true,
+            IsJudge = game.Judge.Id == user.Id
+        };
     }
 
     public async Task JoinGameAsync(int gameId, Role newRole, Team team)
@@ -86,21 +106,24 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
         var user = userContext.GetCurrentUser();
         var canJoinGame = await userRepository.CanjoinGame(user.Id);
         if (canJoinGame != null)
-            throw new BadHttpRequestException($"User Already on a game with id {canJoinGame} leave it first!");
+            return;
         if (!GameMemoryStorage.TryGetGame(gameId, out var game))
             throw new InvalidOperationException("Game not found.");
+
+        var player = new PlayerDto
+        {
+            Id = user.Id,
+            Username = user.UserName
+        };
+
         if (newRole == Role.Spectator)
         {
             game.Participants.Add(user.Id);
-            game.Spectators.Add(new PlayerDto
-            {
-                Id = user.Id,
-                Username = user.UserName
-            });
+            game.Spectators.Add(player);
         }
         else if (newRole == Role.Judge)
         {
-            throw new BadHttpRequestException("You cannot join a judge.");
+            throw new BadHttpRequestException("Cannot join as Judge.");
         }
         else
         {
@@ -113,39 +136,220 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
             await userRepository.AddPlayerToGame(user.Id, game.GameId);
             game.Participants.Add(user.Id);
             if (team == Team.Team1)
-                game.Team1.Add(new PlayerDto
-                {
-                    Id = user.Id,
-                    Username = user.UserName
-                });
+                game.Team1.Add(player);
             else
-                game.Team2.Add(new PlayerDto
-                {
-                    Id = user.Id,
-                    Username = user.UserName
-                });
+                game.Team2.Add(player);
         }
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("PlayerJoined", new
+        {
+            Player = player,
+            Role = newRole.ToString(),
+            Team = team.ToString(),
+            GameId = gameId
+        });
     }
 
     public async Task LeaveGameAsync()
     {
         var user = userContext.GetCurrentUser();
-
         var gameId = await userRepository.CanjoinGame(user.Id);
         if (!gameId.HasValue || !GameMemoryStorage.TryGetGame(gameId.Value, out var game))
             throw new InvalidOperationException("Game not found.");
 
         await userRepository.SetUsersFree([user.Id]);
-
         game.Participants.Remove(user.Id);
+        RemovePlayerFromTeam(game.Team1, user.Id);
+        RemovePlayerFromTeam(game.Team2, user.Id);
+        RemovePlayerFromTeam(game.Spectators, user.Id);
+
+        await hubContext.Clients.Group($"game:{gameId.Value}").SendAsync("PlayerLeft", new
+        {
+            PlayerId = user.Id,
+            GameId = gameId.Value
+        });
+
+        if (game.Judge.Id == user.Id)
+            await EndGameAsync(gameId.Value);
+    }
+
+    public async Task ChangeTeamAsync(int gameId, Team newTeam)
+    {
+        var user = userContext.GetCurrentUser();
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (!game.Participants.Contains(user.Id))
+            throw new InvalidOperationException("User is not in the game.");
+
+        if (game.Judge.Id == user.Id)
+            throw new InvalidOperationException("Judge cannot change teams.");
 
         RemovePlayerFromTeam(game.Team1, user.Id);
         RemovePlayerFromTeam(game.Team2, user.Id);
+        RemovePlayerFromTeam(game.Spectators, user.Id);
 
-        if (game.Judge.Id == user.Id) await EndGameAsync(gameId.Value);
+        var player = new PlayerDto
+        {
+            Id = user.Id,
+            Username = user.UserName
+        };
+
+        if (newTeam == Team.Spectator)
+            game.Spectators.Add(player);
+        else if (newTeam == Team.Team1)
+            game.Team1.Add(player);
+        else
+            game.Team2.Add(player);
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("TeamChanged", new
+        {
+            PlayerId = user.Id,
+            NewTeam = newTeam.ToString(),
+            GameId = gameId
+        });
     }
 
-// Helper method to remove a player from a team
+    public async Task StartRoundAsync(int gameId, int roundNumber)
+    {
+        var user = userContext.GetCurrentUser();
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (user.Id != game.Judge.Id)
+            throw new InvalidOperationException("Only the Judge can start a round.");
+
+        if (game.Round != Round.Judge)
+            throw new InvalidOperationException("Cannot start round; not in Judge phase.");
+
+        game.CurrentRoundNumber = roundNumber;
+        game.Round = roundNumber % 2 == 1 ? Round.Team1 : Round.Team2;
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("RoundStarted", new
+        {
+            GameId = gameId,
+            RoundNumber = roundNumber,
+            CurrentTeam = game.Round.ToString(),
+            Duration = game.RoundDuration
+        });
+    }
+
+    public async Task SubmitAnswerAsync(int gameId, int cellIndex, string content)
+    {
+        var user = userContext.GetCurrentUser();
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (!game.Participants.Contains(user.Id))
+            throw new InvalidOperationException("User is not in the game.");
+
+        if (game.Round == Round.Judge || game.Round == Round.Finished)
+            throw new InvalidOperationException("Cannot submit answer; round not active.");
+
+        var team = game.Team1.Any(p => p.Id == user.Id) ? Team.Team1 :
+            game.Team2.Any(p => p.Id == user.Id) ? Team.Team2 :
+            throw new InvalidOperationException("User is not on a team.");
+        if (team.ToString() != game.Round.ToString())
+            throw new InvalidOperationException("Not your team's turn.");
+
+        if (cellIndex < 0 || cellIndex > 8)
+            throw new InvalidOperationException("Invalid cell index.");
+
+        if (game.CellStates[cellIndex] != CellStates.Empty)
+            throw new InvalidOperationException("Cell already taken.");
+
+        var answer = new Answer
+        {
+            CellIndex = cellIndex,
+            Team = team,
+            Content = content,
+            IsAccepted = false
+        };
+
+        if (!game.Answers.ContainsKey(game.CurrentRoundNumber))
+            game.Answers[game.CurrentRoundNumber] = [];
+
+        game.Answers[game.CurrentRoundNumber].Add(answer);
+        game.Round = Round.Judge;
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("AnswerSubmitted", new
+        {
+            GameId = gameId,
+            CellIndex = cellIndex,
+            Team = team.ToString(),
+            Content = content
+        });
+    }
+
+    public async Task JudgeAnswerAsync(int gameId, int cellIndex, bool accept)
+    {
+        var user = userContext.GetCurrentUser();
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (user.Id != game.Judge.Id)
+            throw new InvalidOperationException("Only the Judge can judge answers.");
+
+        if (game.Round != Round.Judge)
+            throw new InvalidOperationException("Not in Judge phase.");
+
+        if (!game.Answers.TryGetValue(game.CurrentRoundNumber, out var answers))
+            throw new InvalidOperationException("No answers for this round.");
+
+        var answer = answers.FirstOrDefault(a => a.CellIndex == cellIndex);
+        if (answer == null)
+            throw new InvalidOperationException("Answer not found.");
+
+        answer.IsAccepted = accept;
+        if (accept)
+            game.CellStates[cellIndex] = answer.Team == Team.Team1 ? CellStates.Team1 : CellStates.Team2;
+
+        game.Round = Round.Finished;
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("AnswerJudged", new
+        {
+            GameId = gameId,
+            CellIndex = cellIndex,
+            Accepted = accept,
+            game.CellStates
+        });
+
+        if (CheckWinCondition(game))
+        {
+            await EndGameAsync(gameId);
+        }
+        else
+        {
+            game.Round = Round.Judge;
+            await hubContext.Clients.Group($"game:{gameId}").SendAsync("RoundFinished", new
+            {
+                GameId = gameId,
+                NextRound = game.CurrentRoundNumber + 1
+            });
+        }
+    }
+
+    public async Task UpdateGridAsync(int gameId, List<CellStates> newCellStates)
+    {
+        var user = userContext.GetCurrentUser();
+        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
+            throw new InvalidOperationException("Game not found.");
+
+        if (user.Id != game.Judge.Id)
+            throw new InvalidOperationException("Only the Judge can update the grid.");
+
+        if (newCellStates.Count != 9)
+            throw new InvalidOperationException("Grid must have 9 cells.");
+
+        game.CellStates = newCellStates;
+
+        await hubContext.Clients.Group($"game:{gameId}").SendAsync("GridUpdated", new
+        {
+            GameId = gameId,
+            CellStates = newCellStates
+        });
+    }
+
     private void RemovePlayerFromTeam(List<PlayerDto> team, int userId)
     {
         var player = team.FirstOrDefault(p => p.Id == userId);
@@ -165,5 +369,24 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
         } while (GameMemoryStorage.GetAllGames().ContainsKey(gameId));
 
         return gameId;
+    }
+
+    private bool CheckWinCondition(Game game)
+    {
+        var board = game.CellStates;
+        for (var i = 0; i < 3; i++)
+        {
+            if (board[i * 3] != CellStates.Empty && board[i * 3] == board[i * 3 + 1] &&
+                board[i * 3 + 1] == board[i * 3 + 2])
+                return true; // Row
+            if (board[i] != CellStates.Empty && board[i] == board[i + 3] && board[i + 3] == board[i + 6])
+                return true; // Column
+        }
+
+        if (board[0] != CellStates.Empty && board[0] == board[4] && board[4] == board[8])
+            return true; // Diagonal
+        if (board[2] != CellStates.Empty && board[2] == board[4] && board[4] == board[6])
+            return true; // Diagonal
+        return false;
     }
 }

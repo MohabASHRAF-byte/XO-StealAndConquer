@@ -1,20 +1,21 @@
-using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text.Json;
+using Core.Repositories.User;
 using Core.Storage;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Core.Hubs;
 
-public class GameHub(AppDbContext dbContext) : Hub
+[Authorize]
+public class GameHub(AppDbContext dbContext, IUserRepository userRepository) : Hub
 {
-    private readonly AppDbContext _dbContext = dbContext;
-
     public override async Task OnConnectedAsync()
     {
-        var userIdClaim = Context.User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(userIdClaim, out var userId))
         {
-            var user = await _dbContext.Users.FindAsync(userId);
+            var user = await dbContext.Users.FindAsync(userId);
             if (user != null)
             {
                 var connectionIds = string.IsNullOrEmpty(user.ConnectionIds)
@@ -24,8 +25,11 @@ public class GameHub(AppDbContext dbContext) : Hub
                 {
                     connectionIds.Add(Context.ConnectionId);
                     user.ConnectionIds = JsonSerializer.Serialize(connectionIds);
-                    await _dbContext.SaveChangesAsync();
+                    await dbContext.SaveChangesAsync();
                 }
+
+                var gameId = await userRepository.CanjoinGame(userId);
+                if (gameId.HasValue) await Groups.AddToGroupAsync(Context.ConnectionId, $"game:{gameId.Value}");
             }
         }
 
@@ -34,10 +38,10 @@ public class GameHub(AppDbContext dbContext) : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var userIdClaim = Context.User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(userIdClaim, out var userId))
         {
-            var user = await _dbContext.Users.FindAsync(userId);
+            var user = await dbContext.Users.FindAsync(userId);
             if (user != null)
             {
                 var connectionIds = string.IsNullOrEmpty(user.ConnectionIds)
@@ -45,10 +49,24 @@ public class GameHub(AppDbContext dbContext) : Hub
                     : JsonSerializer.Deserialize<List<string>>(user.ConnectionIds)!;
                 connectionIds.Remove(Context.ConnectionId);
                 user.ConnectionIds = connectionIds.Any() ? JsonSerializer.Serialize(connectionIds) : null;
-                await _dbContext.SaveChangesAsync();
+                await dbContext.SaveChangesAsync();
+
+                var gameId = await userRepository.CanjoinGame(userId);
+                if (gameId.HasValue) await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"game:{gameId.Value}");
             }
         }
 
         await base.OnDisconnectedAsync(exception);
+    }
+
+    public async Task JoinGame(int gameId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, gameId.ToString());
+        await Clients.Group(gameId.ToString()).SendAsync("PlayerJoined", Context.ConnectionId);
+    }
+
+    public async Task SelectCell(int gameId, int cellIndex, string team)
+    {
+        await Clients.Group(gameId.ToString()).SendAsync("CellSelected", cellIndex, team);
     }
 }

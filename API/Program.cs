@@ -1,5 +1,6 @@
 using System.Text;
 using Core.Hubs;
+using Core.Jobs;
 using Core.Repositories.User;
 using Core.Services;
 using Core.Storage;
@@ -8,9 +9,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using UserContext = Core.UserContext.UserContext;
-
-// <== Add this for Swagger security
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,7 +17,6 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // Add Bearer token support to Swagger
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -46,41 +43,57 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigins", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173") // Exact origin, no trailing slash
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .SetIsOriginAllowedToAllowWildcardSubdomains();
+    });
+});
+
 // Configure EF Core with SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("SQLite")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
 // Configure SignalR
-builder.Services.AddSignalR();
+builder.Services.AddSignalR().AddHubOptions<GameHub>(options =>
+{
+    options.EnableDetailedErrors = true; // Useful for debugging
+});
 
 // Configure services
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IUserContext, UserContext>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddHttpContextAccessor(); // Make sure this line exists
+builder.Services.AddHttpContextAccessor();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-        };
-    });
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+    };
+});
 
 builder.Services.AddAuthorization();
+builder.Services.AddHostedService<StartupJob>();
 
 var app = builder.Build();
 
@@ -95,13 +108,18 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    dbContext.Database.Migrate();
+    if (dbContext.Database.HasPendingModelChanges())
+        dbContext.Database.Migrate();
 }
 
+app.UseCors("AllowSpecificOrigins"); // Apply CORS before authentication
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // Serve test-client.html
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map controllers and SignalR hubs
 app.MapControllers();
-app.MapHub<GameHub>("/gameHub");
+app.MapHub<GameHub>("/gameHub").RequireCors("AllowSpecificOrigins");
 
 app.Run();

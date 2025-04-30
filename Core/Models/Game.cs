@@ -5,7 +5,7 @@ namespace Core.Models;
 
 public class Game
 {
-    public int RoundDuration = 30;
+    public int RoundDuration { get; set; } = 30;
     public int GameId { get; set; }
     public PlayerDto Judge { get; set; } = new();
     public List<PlayerDto> Team1 { get; set; } = [];
@@ -16,4 +16,29 @@ public class Game
     public List<string> ColumnLabels { get; set; } = [];
     public List<CellStates> CellStates { get; set; } = [];
     public Round Round { get; set; } = Round.Judge;
+    public int CurrentRoundNumber { get; set; } = 0;
+    public Dictionary<int, List<Answer>> Answers { get; set; } = []; // Round number -> List of answers
+}
+
+public class Answer
+{
+    public int CellIndex { get; set; } // 0-8 (3x3 grid)
+    public Team Team { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public bool IsAccepted { get; set; }
+}
+
+public enum CellStates
+{
+    Empty,
+    Team1,
+    Team2
+}
+
+public enum Round
+{
+    Judge,
+    Team1,
+    Team2,
+    Finished
 }

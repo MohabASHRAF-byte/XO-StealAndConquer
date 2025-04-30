@@ -38,9 +38,18 @@ public class GameController(GameService gameService) : ControllerBase
     public async Task<IActionResult> JoinGame([FromRoute] int gameId, [FromBody] JoinGameRequest request)
     {
         await gameService.JoinGameAsync(gameId, request.Role, request.Team);
-        return Ok();
+        return Ok(gameService.LoadGameAsync(gameId));
     }
 
+    [HttpGet("load")]
+    [Authorize]
+    public async Task<IActionResult> LoadGame()
+    {
+        return Ok(await gameService.LoadGameAsync());
+    }
+
+    [HttpPost("{gameId}/change-team")]
+    [Authorize]
     [HttpPost("leave")]
     [Authorize]
     public async Task<IActionResult> LeaveGame()
