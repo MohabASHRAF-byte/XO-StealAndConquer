@@ -17,7 +17,7 @@ public class Game
     public List<CellStates> CellStates { get; set; } = [];
     public Round Round { get; set; } = Round.Judge;
     public int CurrentRoundNumber { get; set; } = 0;
-    public Dictionary<int, List<Answer>> Answers { get; set; } = []; // Round number -> List of answers
+    public List<Answer> Answers { get; set; } = []; // Round number -> List of answers
     public int NextTeam { set; get; } = 0;
 }
 

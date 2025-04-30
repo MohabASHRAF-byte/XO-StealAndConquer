@@ -234,52 +234,6 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
         });
     }
 
-    public async Task SubmitAnswerAsync(int gameId, int cellIndex, string content)
-    {
-        var user = userContext.GetCurrentUser();
-        if (!GameMemoryStorage.TryGetGame(gameId, out var game))
-            throw new InvalidOperationException("Game not found.");
-
-        if (!game.Participants.Contains(user.Id))
-            throw new InvalidOperationException("User is not in the game.");
-
-        if (game.Round == Round.Judge || game.Round == Round.Finished)
-            throw new InvalidOperationException("Cannot submit answer; round not active.");
-
-        var team = game.Team1.Any(p => p.Id == user.Id) ? Team.Team1 :
-            game.Team2.Any(p => p.Id == user.Id) ? Team.Team2 :
-            throw new InvalidOperationException("User is not on a team.");
-        if (team.ToString() != game.Round.ToString())
-            throw new InvalidOperationException("Not your team's turn.");
-
-        if (cellIndex < 0 || cellIndex > 8)
-            throw new InvalidOperationException("Invalid cell index.");
-
-        if (game.CellStates[cellIndex] != CellStates.Empty)
-            throw new InvalidOperationException("Cell already taken.");
-
-        var answer = new Answer
-        {
-            CellIndex = cellIndex,
-            Team = team,
-            Content = content,
-            IsAccepted = false
-        };
-
-        if (!game.Answers.ContainsKey(game.CurrentRoundNumber))
-            game.Answers[game.CurrentRoundNumber] = [];
-
-        game.Answers[game.CurrentRoundNumber].Add(answer);
-        game.Round = Round.Judge;
-
-        await hubContext.Clients.Group($"game:{gameId}").SendAsync("AnswerSubmitted", new
-        {
-            GameId = gameId,
-            CellIndex = cellIndex,
-            Team = team.ToString(),
-            Content = content
-        });
-    }
 
     public async Task JudgeAnswerAsync(int gameId, int cellIndex, bool accept)
     {
@@ -293,10 +247,8 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
         if (game.Round != Round.Judge)
             throw new InvalidOperationException("Not in Judge phase.");
 
-        if (!game.Answers.TryGetValue(game.CurrentRoundNumber, out var answers))
-            throw new InvalidOperationException("No answers for this round.");
 
-        var answer = answers.FirstOrDefault(a => a.CellIndex == cellIndex);
+        var answer = game.Answers.LastOrDefault();
         if (answer == null)
             throw new InvalidOperationException("Answer not found.");
 
@@ -314,7 +266,7 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
             game.CellStates
         });
 
-        if (CheckWinCondition(game))
+        if (Utils.Utils.CheckWinCondition(game) != CellStates.Empty)
         {
             await EndGameAsync(gameId);
         }
@@ -369,24 +321,5 @@ public class GameService(IUserContext userContext, IUserRepository userRepositor
         } while (GameMemoryStorage.GetAllGames().ContainsKey(gameId));
 
         return gameId;
-    }
-
-    private bool CheckWinCondition(Game game)
-    {
-        var board = game.CellStates;
-        for (var i = 0; i < 3; i++)
-        {
-            if (board[i * 3] != CellStates.Empty && board[i * 3] == board[i * 3 + 1] &&
-                board[i * 3 + 1] == board[i * 3 + 2])
-                return true; // Row
-            if (board[i] != CellStates.Empty && board[i] == board[i + 3] && board[i + 3] == board[i + 6])
-                return true; // Column
-        }
-
-        if (board[0] != CellStates.Empty && board[0] == board[4] && board[4] == board[8])
-            return true; // Diagonal
-        if (board[2] != CellStates.Empty && board[2] == board[4] && board[4] == board[6])
-            return true; // Diagonal
-        return false;
     }
 }

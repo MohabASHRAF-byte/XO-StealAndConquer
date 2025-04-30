@@ -81,7 +81,6 @@ public class GameHub(AppDbContext dbContext, IUserRepository userRepository) : H
 
         var cellMap = GameMemoryStorage.CellSelections[gameId];
 
-        // Keep track of which cells were cleared
         var clearedCells = new List<int>();
 
         foreach (var key in cellMap.Keys.ToList())
@@ -90,16 +89,13 @@ public class GameHub(AppDbContext dbContext, IUserRepository userRepository) : H
             if (removed > 0) clearedCells.Add(key);
         }
 
-        // Broadcast deselections
         foreach (var clearedCell in clearedCells)
             await Clients.Group($"game:{gameId}")
                 .SendAsync("CellSelected", clearedCell, cellMap[clearedCell]);
 
-        // Ensure this cell exists
         if (!cellMap.ContainsKey(cellIndex))
             cellMap[cellIndex] = new List<SignalRDtos.CellSelectorDto>();
 
-        // Add new selection
         cellMap[cellIndex].Add(new SignalRDtos.CellSelectorDto
         {
             UserId = userId,
@@ -122,11 +118,49 @@ public class GameHub(AppDbContext dbContext, IUserRepository userRepository) : H
         if (game.Round != Round.Notstarted)
             return;
         game.NextTeam = team == 1 ? 2 : 1;
-
+        game.Round = team == 1 ? Round.Team1 : Round.Team2;
         await Clients.Group($"game:{gameId}").SendAsync("StartTimer", new
         {
             Team = team,
             Duration = game.RoundDuration
         });
+    }
+
+    public async Task SubmitAnswer(int gameId, int cellIdx, string answer)
+    {
+        GameMemoryStorage.TryGetGame(gameId, out var game);
+        game.Answers.Add(new Answer
+            {
+                CellIndex = cellIdx,
+                Content = answer,
+                IsAccepted = false,
+                Team = game.Round == Round.Team1 ? Team.Team1 : Team.Team2
+            }
+        );
+        game.Round = Round.Judge;
+        game.NextTeam = game.NextTeam == 1 ? 2 : 1;
+        await Clients.Group($"game:{gameId}").SendAsync("submitted", game.Answers.Last());
+    }
+
+    public async Task Judge(int gameId, bool isCorrect)
+    {
+        GameMemoryStorage.TryGetGame(gameId, out var game);
+        var lastAnswer = game.Answers.Last();
+
+        if (isCorrect)
+        {
+            lastAnswer.IsAccepted = true;
+            game.CellStates[lastAnswer.CellIndex] = lastAnswer.Team == Team.Team1
+                ? CellStates.Team1
+                : CellStates.Team2;
+        }
+
+        game.Round = game.NextTeam == 1 ? Round.Team1 : Round.Team2;
+        await Clients.Group($"game:{gameId}")
+            .SendAsync("judged", game.Answers.Last());
+        var winner = Utils.Utils.CheckWinCondition(game);
+        if (winner != CellStates.Empty)
+            await Clients.Group($"game:{gameId}")
+                .SendAsync("winner", winner);
     }
 }
