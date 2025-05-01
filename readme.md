@@ -1,4 +1,4 @@
-# XO Modern: A Real-Time, Multiplayer Twist on Tic-Tac-Toe
+# Backend for XO: Steal & Conquer : A Real-Time, Multiplayer Twist on Tic-Tac-Toe
 
 **XO Modern** is a real-time, multiplayer game that reimagines the classic Tic-Tac-Toe (XO) with innovative rules and strategic depth. Unlike traditional XO, this game introduces cell-stealing mechanics, custom labels, and a judge system, all powered by tech stack featuring SignalR for real-time communication and a robust API for backup functionality.
 
