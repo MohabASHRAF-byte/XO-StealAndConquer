@@ -1,18 +1,11 @@
-i want to make react application for xo game 
-- the game contains labels for each column and row 
-- and have two teams 
-- each round team submit answer 
-- and their is a judge who verdict this answer 
-- the judge who is the one who creates new game 
- - the app should be one page 
-   - header have the only the username and login if not logged in 
-   - when login either the user is already on game he should continue or leave 
-   - or he can join a game by entering 6 numbers or can create game and be the judge 
-   - their is grid of x o in the middle each round the team choose cell and submit answer that match the cell and can override the previous answer at this cell
-   - the game page should have 2 boxs on the right and the left show the teams members 
-                - grid of the xo in the middle
-                - box like chat for the previous answer 
-                - and if you are the judge he should have a box to judge the answer with correct or wrong 
-                
-- game functionality works real time with signalR and the backend is dotnet 
-- implement the ui/ux first then the functionality one by one 
+i want to write github readme file for this backend game 
+first [name of the XO with modern Rules]
+add all the tech used and mention that it works realtime with SignalR
+- the game  is unlike the tradattional xo you can steal the other player cell 
+- first the game should contains at least 3 players player at each time and a judge 
+- each row and column have label and in each team's round should submit answer that matches the interections of this label 
+- the answer is judged by the judge to get the verdict 
+- you can choose cell that it previously selected and steal it from the other team
+- first team to have three consecutive cells wins the game
+mentions that the game works with signal r with api backup for all functions  
+mention how to run it's back end and it supports swagger 
